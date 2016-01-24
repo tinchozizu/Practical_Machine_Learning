@@ -1,0 +1,83 @@
+---
+title: "Machine Learning Project"
+author: "Martin Salvo"
+date: "Sunday, January 24, 2016"
+output: html_document
+---
+
+This document is part of the Coursera Machine Learning Final Assignment, in which we will try to predict how to make proper predictions out of Groupware-HAR database (Human activity recognition).
+
+The idea is to identify through the movement of accelerometers whether the people is doing the exercise right or making one of the five type of mistakes.
+
+First, we load the database and try to process the data, eliminating NA and outliers.
+
+
+```{r}
+library(caret)
+library(ggplot2)
+library(doParallel)
+library(randomForest)
+
+
+setwd("C:/Users/samsung/Documents/Data_Science/Material/Machine Learning/CourseProject")
+
+RawData <- read.csv("pml-training.csv")
+RawData[is.na(RawData)] <- 0
+
+#removing some outliers
+TrainData <- RawData[-5373,]
+TrainData <- RawData[-9274,]
+
+nsv <- nearZeroVar(TrainData, saveMetrics= TRUE)
+
+keeps <- c("classe","roll_belt","magnet_dumbbell_y","pitch_belt","pitch_forearm","roll_forearm")
+TrainData <- TrainData[keeps]
+
+##Exploratory Charts
+qplot(roll_belt, magnet_dumbbell_y, colour=classe, data=TrainData)
+qplot(pitch_belt, pitch_forearm, colour=classe, data=TrainData)
+
+TrainData <- TrainData[keeps]
+
+```
+
+I have made some exploratory charts on my own that shows how the **classes** are clustered. The five predictors are selected among the ones have variability (non-zero-variability factors) and also a considerable percentage of unique values. Not always the predictors with the highest amount of unique values are the best.
+
+
+```{r}
+
+set.seed(1048)
+
+inTrain <- createDataPartition(y=TrainData$classe, p=0.60, list=FALSE)
+
+training <- TrainData[inTrain,]
+testing <- TrainData[-inTrain,]
+dim(training);dim(testing)
+
+model <- foreach(ntree=rep(100, 4), .combine=randomForest::combine) %dopar% randomForest(training[,2:6], training$classe, ntree=ntree)
+
+predictionsTraining <- predict(model, newdata=training)
+confusionMatrix(predictionsTraining, training$classe)
+
+#cross-Validation
+predictionsTesting <- predict(model, newdata=testing)
+confusionMatrix(predictionsTesting,testing$classe)
+
+```
+
+
+I have made a 60% training database for training and 40% for testing (or cross-validation) given that there is a separate testing database. Both values of sensitivity and specificity are higher than 92% and the accuracy ratio is 95,72% in the cross-validation section. So the results are quite impressive.
+
+```{r}
+
+TestData <- read.csv("pml-testing.csv")
+
+keeps2 <- c("roll_belt","magnet_dumbbell_y","pitch_belt","pitch_forearm","roll_forearm")
+
+TestData <- TestData[keeps2]
+
+predictionsRealTest <- predict(model, newdata=TestData)
+
+```
+
+The last part of the assignment tries to predict the 20 values of the final projects code.
